@@ -46,7 +46,7 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email inválido.' });
     }
 
-    const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    const existing = await db.queryFallback('users', 'find', [{ email }]).then(c => c.toArray());
     if (existing.length) {
       return res.status(409).json({ error: 'Este email já está registado.' });
     }
@@ -55,10 +55,7 @@ router.post('/register', async (req, res) => {
     const salt   = crypto.randomBytes(32).toString('hex'); // 256-bit salt
 
     // Registo temporário — auth_hash fica como 'pending' até ao passo 2
-    await db.query(
-      'INSERT INTO users (id, email, salt, auth_hash) VALUES (?, ?, ?, ?)',
-      [userId, email, salt, 'pending']
-    );
+    await db.queryFallback('users', 'insertOne', [{ id: userId, email, salt, auth_hash: 'pending', created_at: new Date() }]);
 
     res.status(201).json({ userId, salt });
   } catch (err) {
@@ -75,16 +72,13 @@ router.post('/register/finalize', async (req, res) => {
       return res.status(400).json({ error: 'Campos em falta.' });
     }
 
-    const [rows] = await db.query(
-      'SELECT id FROM users WHERE id = ? AND auth_hash = ?',
-      [userId, 'pending']
-    );
+    const rows = await db.queryFallback('users', 'find', [{ id: userId, auth_hash: 'pending' }]).then(c => c.toArray());
     if (!rows.length) {
       return res.status(404).json({ error: 'Sessão de registo não encontrada ou já finalizada.' });
     }
 
     const authHash = await bcrypt.hash(authToken, BCRYPT_ROUNDS);
-    await db.query('UPDATE users SET auth_hash = ? WHERE id = ?', [authHash, userId]);
+    await db.queryFallback('users', 'updateOne', [{ id: userId }, { $set: { auth_hash: authHash } }]);
 
     const token = await signToken({ userId });
     res.json({ token });
@@ -102,10 +96,7 @@ router.post('/login', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email em falta.' });
 
-    const [rows] = await db.query(
-      'SELECT id, salt FROM users WHERE email = ? AND auth_hash != ?',
-      [email, 'pending']
-    );
+    const rows = await db.queryFallback('users', 'find', [{ email, auth_hash: { $ne: 'pending' } }]).then(c => c.toArray());
 
     // Resposta uniforme para não revelar se o email existe (time-constant comparison)
     if (!rows.length) {
@@ -128,10 +119,7 @@ router.post('/login/verify', async (req, res) => {
       return res.status(400).json({ error: 'Campos em falta.' });
     }
 
-    const [rows] = await db.query(
-      'SELECT id, auth_hash FROM users WHERE id = ?',
-      [userId]
-    );
+    const rows = await db.queryFallback('users', 'find', [{ id: userId }]).then(c => c.toArray());
     if (!rows.length) {
       return res.status(401).json({ error: 'Credenciais inválidas.' });
     }

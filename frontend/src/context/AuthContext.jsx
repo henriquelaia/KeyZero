@@ -10,9 +10,9 @@ import { createContext, useContext, useState } from 'react';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [auth, setAuth] = useState(null); // { token, encKey, email }
+  const [auth, setAuth] = useState(null); // { token, encKey, email, userId }
 
-  const login  = (token, encKey, email) => setAuth({ token, encKey, email });
+  const login  = (token, encKey, email, userId) => setAuth({ token, encKey, email, userId });
   const logout = () => setAuth(null);
 
   return (

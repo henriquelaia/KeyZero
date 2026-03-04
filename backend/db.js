@@ -1,29 +1,43 @@
-const mysql = require('mysql2/promise');
+const { MongoClient } = require('mongodb');
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: Number(process.env.DB_PORT) || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASS || '',
-  database: process.env.DB_NAME || 'keyzero',
-  waitForConnections: true,
-  connectionLimit: 10,
-  charset: 'utf8mb4',
-  connectTimeout: 10000,   // 10s de timeout de ligação
-});
+// O MongoDB URI pode vir das vars de ambiente ou localhost (sem pass) se local
+const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
+const dbName = process.env.DB_NAME || 'keyzero';
 
-// Testa a ligação ao iniciar (falha rápido se BD não estiver disponível)
-pool.query('SELECT 1')
-  .then(() => { console.log('✅ MySQL ligado com sucesso'); })
-  .catch(err => { console.error('❌ Erro de ligação à BD:', err.message); });
+const client = new MongoClient(uri);
+let dbInstance;
 
-// Wrapper para manter API simples no resto do código
-// mysql2 pool.query() já devolve [rows, fields]
+async function connectDB() {
+  try {
+    await client.connect();
+    dbInstance = client.db(dbName);
+    console.log('✅ MongoDB ligado com sucesso');
+
+    // Create unique indexes
+    await dbInstance.collection('users').createIndex({ email: 1 }, { unique: true });
+    await dbInstance.collection('users').createIndex({ salt: 1 }, { unique: true });
+    
+  } catch (err) {
+    console.error('❌ Erro de ligação à BD:', err.message);
+  }
+}
+
+connectDB();
+
+// Wrapper simplificado (adapter) para aproveitar a sintaxe anterior tanto quanto possível
+// Note-se que isto serve essencialmente como fachada
 const db = {
-  async query(sql, params) {
-    const [rows] = await pool.query(sql, params);
-    return [rows];
+  getCollection(collName) {
+    if (!dbInstance) throw new Error('Database not initialized');
+    return dbInstance.collection(collName);
   },
+  
+  // Função helper para manter o mínimo de alterações possível na aplicação core que possa usar SQL direto
+  // Retorna "rows" simulando o mysql
+  async queryFallback(collection, operation, args) {
+     const coll = this.getCollection(collection);
+     return await coll[operation](...args);
+  }
 };
 
 module.exports = db;
