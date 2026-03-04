@@ -27,15 +27,15 @@ export default function RegisterPage({ onSwitch }) {
     setLoadingFile(true);
 
     try {
-      // 1. Gera e permite guardar a chave no disco
+      // 1. Verificar primeiro com o servidor se o email está disponível
+      const { userId, salt } = await api.register(email);
+
+      // 2. Só depois de confirmado, gerar e guardar a chave no disco
       const fileKeyStr = await generateAndSaveKeyFile();
       if (!fileKeyStr) {
         setLoadingFile(false);
         return; // user cancelou o picker
       }
-
-      // 2. Continua o fluxo normal, usando `fileKeyStr` como MasterKey
-      const { userId, salt } = await api.register(email);
       const [encKey, authToken] = await Promise.all([
         deriveEncryptionKey(fileKeyStr, salt),
         deriveAuthToken(fileKeyStr, salt),
