@@ -21,7 +21,7 @@ export default function RegisterPage({ onSwitch }) {
 
   async function handleHardwareKeyRegister() {
     if (!email || !email.includes('@')) {
-      return setError('Preencha um email válido prrimeiro.');
+      return setError('Preencha um email válido primeiro.');
     }
     setError('');
     setLoadingFile(true);

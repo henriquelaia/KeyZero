@@ -1,10 +1,4 @@
-/**
- * KeyZero — Rotas CRUD de Passwords
- *
- * TODAS as rotas exigem JWT válido (user_id extraído do token).
- * O servidor APENAS armazena e devolve blobs cifrados — nunca decifra nada.
- * O isolamento por user_id é feito em TODAS as queries para prevenir IDOR.
- */
+// KeyZero — Rotas CRUD de Passwords (JWT obrigatório; servidor só armazena blobs cifrados)
 
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');

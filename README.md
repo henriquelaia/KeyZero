@@ -1,95 +1,127 @@
-# 🛡️ KeyZero
-> **One MasterKey. Zero Worries.**
+# KeyZero — One MasterKey. Zero Worries.
 
-Bem-vindo ao repositório do **KeyZero**, um gestor de passwords ultrasseguro desenvolvido para o Hackathon *Shift to Digital*. O KeyZero utiliza uma arquitetura **Zero-Knowledge** (Conhecimento Zero), garantindo que apenas tu tens acesso aos teus dados — o servidor nunca vê, guarda ou transmite a tua MasterKey.
-
----
-
-## ✨ Funcionalidades Principais
-
-* 🔒 **Arquitetura Zero-Knowledge**: A tua chave mestre (MasterKey) nunca sai do teu browser.
-* 🛡️ **Criptografia de Nível Militar**: Utiliza PBKDF2-SHA256 para derivação de chaves e AES-GCM (256-bit) para cifrar as passwords no browser antes de as enviar para o servidor.
-* 🔑 **Cofre de Passwords CRUD**: Adiciona, edita, vê, copia e apaga as tuas passwords agrupadas num dashboard intuitivo com funcionalidade de pesquisa em tempo real.
-* 🎲 **Gerador de Passwords Seguro**: Ferramenta integrada com gerador criptograficamente seguro (CSPRNG) através de `window.crypto.getRandomValues`.
-* 📱 **Design Responsivo & Moderno**: Interface dark-mode desenhada para funcionar perfeitamente em mobile e desktop, com notificações toast, skeletons de loading e badges de segurança.
-* 🚦 **Validação Rigorosa da MasterKey**: O sistema obriga a regras fortes (mín. 12 caracteres, sem começar por maiúscula ou terminar em número, mistura de caracteres) validadas em tempo real.
+Gestor de passwords **Zero-Knowledge** desenvolvido para o Hackathon *Shift to Digital*. O servidor nunca vê, guarda nem transmite a tua MasterKey — toda a criptografia acontece exclusivamente no teu browser.
 
 ---
 
-## 🏗️ Estado do Projeto
+## Funcionalidades
 
-O projeto encontra-se **funcional e implementado** nos seguintes componentes:
-
-### 1. Base de Dados (MongoDB)
-- Isolamento por utilizador (IDOR Prevention / Data partitioning)
-- Passwords cifradas em JSON sem serem interpretáveis pela BD.
-
-### 2. Backend (Node.js / Express)
-- Endpoints de autenticação Zero-Knowledge (Registo e Login em 2 passos isolados).
-- Autenticação com Passkeys integrando suporte para WebAuthn PRF.
-- Endpoints CRUD protegidos via JWT.
-- Integração de segurança com pacotes modernos compatíveis (`bcryptjs`, `jose`, `mongodb`).
-
-### 3. Frontend (React / Vite)
-- Gestão total da criptografia client-side (no ficheiro `utils/crypto.js` e `utils/passkeys.js`).
-- Páginas completas e funcionais: Registo, Login e Dashboard do Cofre.
-- Contexto de Autenticação state-of-the-art em memória (Zero persistência em localStorage para chaves sensíveis).
+- **Arquitetura Zero-Knowledge** — encKey e authToken derivados localmente via PBKDF2 (310 000 iterações, SHA-256); o servidor só armazena `bcrypt(authToken)`
+- **Criptografia AES-GCM 256-bit** — passwords cifradas no browser antes de serem enviadas
+- **Passkeys com WebAuthn PRF** — login biométrico zero-knowledge: a PRF Extension do WebAuthn substitui a MasterKey de forma transparente
+- **Login por Ficheiro de Chave** — alternativa à MasterKey manual: chave gerada e guardada em disco
+- **Cofre CRUD** — adicionar, editar, copiar, apagar passwords com pesquisa em tempo real
+- **Gerador CSPRNG** — `window.crypto.getRandomValues`, garante maiúscula, número e símbolo
+- **Deteção de Phishing** — Google Safe Browsing API + typosquatting local (distância de Levenshtein)
+- **Design responsivo, dark mode** — notificações toast, validação em tempo real da MasterKey
 
 ---
 
-## 🧠 Como funciona a Arquitetura Zero-Knowledge?
-
-O nosso maior diferencial é que a base de dados pode ser totalmente exposta e os teus dados continuam 100% seguros.
+## Arquitetura Zero-Knowledge
 
 ```mermaid
 graph TD
-    A[MasterKey no Browser / PRF Passkey] -->|PBKDF2 + salt + ':enc'| B(encKey - AES-GCM)
-    A -->|PBKDF2 + salt + ':auth'| C(authToken - 256-bit Hex)
-    B -.->|Cifra as passwords localmente| D[Passwords Encriptadas enviadas para a BD]
-    C -->|Enviado no Login| E[Servidor]
-    E -->|bcryptjs| F[(MongoDB)]
+    A["MasterKey (browser) / PRF Output (Passkey)"]
+    A -->|"PBKDF2 + salt + ':enc' · 310k iter"| B["encKey — AES-GCM 256-bit\n(não-exportável, só em memória)"]
+    A -->|"PBKDF2 + salt + ':auth' · 310k iter"| C["authToken — 256-bit hex"]
+    B -.->|"Cifra passwords localmente"| D["Blobs cifrados → MongoDB"]
+    C -->|"Enviado no login"| E["Servidor"]
+    E -->|"bcrypt(authToken, 12 rounds)"| F[("MongoDB\nauth_hash")]
 ```
 
-* **Separação de Chaves:** A partir de uma única MasterKey (ou biometria PRF), derivamos independentemente uma `encKey` (para cifrar dados) e um `authToken` (para fazer o login).
-* Comprometer uma hash na base de dados requereria **+310.000 iterações** de brute-force por tentativa por causa do mecanismo PBKDF2.
+As duas chaves derivadas são matematicamente independentes: comprometer o `authToken` não compromete o `encKey`, e vice-versa.
 
 ---
 
-## 🚀 Como Executar Localmente
+## Como Executar Localmente
 
 ### Pré-requisitos
-* **Node.js 18+**
-* **MongoDB** (Rodar um servidor mongod ou usar Atlas Cloud. Ajustar url no ficheiro .env `MONGODB_URI`).
 
-### Passos de Instalação
+- Node.js 18+
+- MongoDB (Atlas ou servidor local `mongod`)
 
-1. **Iniciar o Backend:**
-   ```bash
-   ./start-backend.sh
-   # Alternativa manual: cd backend && npm install && npm run dev
-   # O servidor inicia em http://localhost:3001
-   ```
-   *(Nota: O servidor inclui a criação de um JWT_SECRET aleatório se usares o .env correto).*
+### Backend
 
-2. **Iniciar o Frontend:**
-   ```bash
-   ./start-frontend.sh
-   # Alternativa manual: cd frontend && npm install && npm run dev
-   # A interface fica acessível em http://localhost:5173 
-   ```
+```bash
+cd backend
+cp .env.example .env   # preenche MONGODB_URI e JWT_SECRET
+npm install
+npm run dev            # inicia em http://localhost:3001
+```
 
-*(Certifica-te que os scripts `start-backend.sh` e `start-frontend.sh` têm permissões de execução executando `chmod +x start-*.sh`)*
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev            # abre em http://localhost:5173
+```
+
+### Variáveis de Ambiente (`backend/.env`)
+
+| Variável | Descrição | Exemplo |
+|----------|-----------|---------|
+| `PORT` | Porta do servidor | `3001` |
+| `FRONTEND_URL` | URL do frontend (CORS + origin WebAuthn) | `http://localhost:5173` |
+| `RP_ID` | Relying Party ID para WebAuthn | `localhost` |
+| `MONGODB_URI` | URI de ligação ao MongoDB | `mongodb+srv://...` |
+| `DB_NAME` | Nome da base de dados | `keyzero` |
+| `JWT_SECRET` | Segredo para assinar JWTs (mín. 32 chars aleatórios) | *(gera com `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`)* |
+| `JWT_EXPIRES_IN` | Tempo de expiração do JWT | `7d` |
+| `GOOGLE_SAFE_BROWSING_KEY` | API Key Google Safe Browsing (opcional) | `AIza...` |
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
+## Estrutura do Projeto
 
-* **Frontend:** React, Vite, TailwindCSS, Lucide React, API Web Crypto, SimpleWebAuthn.
-* **Backend:** Node.js, Express, jose (para JWT), bcryptjs, SimpleWebAuthn.
-* **Base de Dados:** MongoDB e pacote nativo oficial.
-* **Infraestrutura:** Node.js.
+```
+KeyZero/
+├── backend/
+│   ├── middleware/
+│   │   └── auth.js              # Middleware JWT (jose)
+│   ├── routes/
+│   │   ├── auth.js              # Registo e login clássico (2 passos ZK)
+│   │   ├── passkeys.js          # WebAuthn PRF — registo e login
+│   │   ├── passwords.js         # CRUD do cofre (protegido por JWT)
+│   │   └── urlcheck.js          # Verificação Google Safe Browsing
+│   ├── db.js                    # Ligação e wrapper MongoDB
+│   ├── server.js                # Express + CORS + rotas
+│   ├── package.json
+│   └── .env.example
+├── frontend/
+│   └── src/
+│       ├── context/
+│       │   └── AuthContext.jsx  # Estado de autenticação em memória
+│       ├── lib/
+│       │   └── api.js           # Chamadas REST ao backend
+│       ├── pages/
+│       │   ├── LoginPage.jsx
+│       │   ├── RegisterPage.jsx
+│       │   └── Dashboard.jsx    # Cofre + gerador + phishing detection
+│       └── utils/
+│           ├── crypto.js        # PBKDF2, AES-GCM, CSPRNG, validação
+│           ├── passkeys.js      # WebAuthn PRF client-side
+│           └── fileAuth.js      # Login/registo por ficheiro de chave
+├── DOCS.md                      # Documentação técnica detalhada
+└── README.md
+```
 
 ---
 
-### Equipa & Notas
-Projeto desenvolvido para a prova do Hackathon "Shift to Digital". A versão atual reflete decisões desenhadas especificamente para maximizar a segurança limitando qualquer exposição lógica, sem sacrificar a conveniência de uso.
+## Tecnologias
+
+| Camada | Tecnologias |
+|--------|------------|
+| Frontend | React, Vite, TailwindCSS, Lucide React, Web Crypto API, `@simplewebauthn/browser` |
+| Backend | Node.js, Express, `jose` (JWT), `bcryptjs`, `@simplewebauthn/server` |
+| Base de dados | MongoDB (driver oficial) |
+| Segurança | PBKDF2-SHA256, AES-GCM, WebAuthn PRF, Google Safe Browsing API |
+
+---
+
+## Equipa
+
+Projeto desenvolvido para o Hackathon **Shift to Digital**.
+Toda a arquitectura foi desenhada para maximizar a segurança sem sacrificar a usabilidade.
+
+Para documentação técnica detalhada, consulta [DOCS.md](./DOCS.md).

@@ -1,7 +1,7 @@
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
 import { deriveEncryptionKey, deriveAuthToken, buf2hex, hex2buf } from './crypto';
 
-const API_BASE = 'http://localhost:3001/api'; // Mudar em ambiente de prod se necessário
+const API_BASE = '/api';
 
 const requestJSON = async (url, options = {}) => {
   const res = await fetch(`${API_BASE}${url}`, {

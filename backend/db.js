@@ -13,7 +13,7 @@ async function connectDB() {
     dbInstance = client.db(dbName);
     console.log('✅ MongoDB ligado com sucesso');
 
-    // Create unique indexes
+    // Criar índices únicos
     await dbInstance.collection('users').createIndex({ email: 1 }, { unique: true });
     await dbInstance.collection('users').createIndex({ salt: 1 }, { unique: true });
     

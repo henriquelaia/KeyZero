@@ -178,7 +178,6 @@ function PasswordForm({ initial, onSave, onClose, loading, token }) {
             <RefreshCw size={15} />
           </button>
         </div>
-        <p className="text-xs text-gray-600">Gerador usa window.crypto.getRandomValues (CSPRNG)</p>
       </div>
       <div className="flex gap-3 pt-2">
         <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancelar</button>
@@ -361,10 +360,10 @@ export default function Dashboard() {
           
           <button onClick={async () => {
             try {
-               await registerPasskey(auth.userId); 
-               alert("Passkey registada com sucesso!");
+               await registerPasskey(auth.userId);
+               notify('Passkey registada com sucesso!');
             } catch (err) {
-               alert("Erro a registar passkey: " + err.message);
+               notify('Erro a registar passkey: ' + err.message, 'error');
             }
           }} className="btn-ghost py-2 px-3 flex items-center gap-2 text-sm text-brand-light border border-brand/20">
              Adicionar Passkey

@@ -1,5 +1,24 @@
-/.claude
-/.env
-/.env.example
-/.node_modules
-/.node_modules_production
+# Dependências
+node_modules/
+
+# Variáveis de ambiente (contêm segredos — NUNCA versionar)
+.env
+backend/.env
+
+# Build do frontend
+frontend/dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code
+.claude/

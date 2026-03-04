@@ -9,8 +9,8 @@ const { SignJWT } = require('jose');
 const db = require('../db');
 
 const rpName = 'KeyZero Zero-Knowledge Vault';
-const rpID = 'localhost'; // In production, this should be the exact domain name.
-const origin = `http://${rpID}:5173`;
+const rpID = process.env.RP_ID || 'localhost';
+const origin = process.env.FRONTEND_URL || `http://localhost:5173`;
 
 async function signToken(payload) {
   const secret = new TextEncoder().encode(process.env.JWT_SECRET);
@@ -45,7 +45,7 @@ router.post('/register/options', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId obrigatório' });
 
     const userRows = await db.queryFallback('users', 'find', [{ id: userId }]).then(c => c.toArray());
-    if (!userRows.length) return res.status(404).json({ error: 'User not found' });
+    if (!userRows.length) return res.status(404).json({ error: 'Utilizador não encontrado.' });
 
     const userEmail = userRows[0].email;
 
@@ -86,7 +86,7 @@ router.post('/register/options', async (req, res) => {
     res.json(options);
   } catch (err) {
     console.error('[passkeys/register/options]', err);
-    res.status(500).json({ error: 'Internal error' });
+    res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
@@ -97,7 +97,7 @@ router.post('/register/verify', async (req, res) => {
     
     const expectedChallenge = await consumeChallenge(userId);
     if (!expectedChallenge) {
-      return res.status(400).json({ error: 'Challenge expired or not found' });
+      return res.status(400).json({ error: 'Challenge expirado ou não encontrado.' });
     }
 
     const verification = await verifyRegistrationResponse({
@@ -130,7 +130,7 @@ router.post('/register/verify', async (req, res) => {
       return res.json({ verified: true });
     }
 
-    res.status(400).json({ error: 'Verification failed' });
+    res.status(400).json({ error: 'Verificação falhou.' });
   } catch (err) {
     console.error('[passkeys/register/verify]', err);
     res.status(500).json({ error: err.message });
@@ -177,7 +177,7 @@ router.post('/login/options', async (req, res) => {
     res.json({ options, salt, userId });
   } catch (err) {
     console.error('[passkeys/login/options]', err);
-    res.status(500).json({ error: 'Internal error' });
+    res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
@@ -193,7 +193,7 @@ router.post('/login/verify', async (req, res) => {
     const creds = await db.queryFallback('passkey_credentials', 'find', [{ id: credentialIDBase64 }]).then(c => c.toArray());
     
     if (!creds.length) {
-      return res.status(404).json({ error: 'Credential not found' });
+      return res.status(404).json({ error: 'Credencial não encontrada.' });
     }
 
     const { user_id, public_key, counter } = creds[0];
@@ -206,11 +206,11 @@ router.post('/login/verify', async (req, res) => {
     // Pegar challenge 
     let expectedChallenge = await consumeChallenge(user_id);
     if (!expectedChallenge) {
-       expectedChallenge = await consumeChallenge('global_challenge_cache'); // fallback attempt
+       expectedChallenge = await consumeChallenge('global_challenge_cache'); // tentativa de fallback
     }
 
     if (!expectedChallenge) {
-      return res.status(400).json({ error: 'Challenge expired or not found' });
+      return res.status(400).json({ error: 'Challenge expirado ou não encontrado.' });
     }
 
     const verification = await verifyAuthenticationResponse({
@@ -223,7 +223,7 @@ router.post('/login/verify', async (req, res) => {
     });
 
     if (verification.verified) {
-      // Update counter
+      // Atualizar contador
       await db.queryFallback('passkey_credentials', 'updateOne', [
         { id: credentialIDBase64 },
         { $set: { counter: verification.authenticationInfo.newCounter, updated_at: new Date() } }
@@ -233,7 +233,7 @@ router.post('/login/verify', async (req, res) => {
       return res.json({ verified: true, token, userId: user_id });
     }
 
-    res.status(400).json({ error: 'Verification failed' });
+    res.status(400).json({ error: 'Verificação falhou.' });
   } catch (err) {
     console.error('[passkeys/login/verify]', err);
     res.status(500).json({ error: err.message });

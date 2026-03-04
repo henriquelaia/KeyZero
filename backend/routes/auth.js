@@ -1,21 +1,9 @@
 /**
  * KeyZero — Rotas de Autenticação Zero-Knowledge
  *
- * FLUXO DE REGISTO (2 passos):
- *  1. POST /api/auth/register        { email }
- *     → Servidor gera salt, cria registo temporário, devolve { userId, salt }
- *  2. POST /api/auth/register/finalize { userId, authToken }
- *     → authToken = PBKDF2(masterKey+":auth", salt)  [derivado no cliente]
- *     → Servidor faz bcrypt(authToken) e armazena. Devolve JWT.
- *
- * FLUXO DE LOGIN (2 passos):
- *  1. POST /api/auth/login           { email }
- *     → Devolve { userId, salt }  (o cliente precisa do salt para derivar a chave)
- *  2. POST /api/auth/login/verify    { userId, authToken }
- *     → Servidor compara bcrypt(authToken) com o hash guardado. Devolve JWT.
- *
- * O servidor NUNCA recebe nem armazena a MasterKey.
- * O encryptionKey NUNCA sai do browser.
+ * Registo e login em 2 passos: o cliente deriva o authToken via PBKDF2 e envia
+ * apenas o token (nunca a MasterKey). O servidor armazena bcrypt(authToken).
+ * O encryptionKey é derivado localmente e nunca sai do browser.
  */
 
 const router  = require('express').Router();
