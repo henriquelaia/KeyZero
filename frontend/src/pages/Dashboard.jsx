@@ -5,6 +5,7 @@ import {
   AlertTriangle, ShieldCheck, Loader2,
 } from 'lucide-react';
 import { encryptPassword, decryptPassword, generatePassword } from '../utils/crypto';
+import { registerPasskey } from '../utils/passkeys';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -357,6 +358,18 @@ export default function Dashboard() {
 
         <div className="flex items-center gap-3">
           <p className="text-sm text-gray-400 hidden md:block truncate max-w-[180px]">{email}</p>
+          
+          <button onClick={async () => {
+            try {
+               await registerPasskey(auth.userId); 
+               alert("Passkey registada com sucesso!");
+            } catch (err) {
+               alert("Erro a registar passkey: " + err.message);
+            }
+          }} className="btn-ghost py-2 px-3 flex items-center gap-2 text-sm text-brand-light border border-brand/20">
+             Adicionar Passkey
+          </button>
+
           <button onClick={logout} className="btn-ghost py-2 px-3 flex items-center gap-2 text-sm">
             <LogOut size={15} />
             <span className="hidden sm:inline">Sair</span>

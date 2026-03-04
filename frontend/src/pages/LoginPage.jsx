@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Shield, Eye, EyeOff } from 'lucide-react';
+import { Shield, Eye, EyeOff, Fingerprint, Loader2, HardDrive } from 'lucide-react';
 import { deriveEncryptionKey, deriveAuthToken } from '../utils/crypto';
+import { readKeyFile } from '../utils/fileAuth';
+import { loginWithPasskey } from '../utils/passkeys';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,32 +12,82 @@ export default function LoginPage({ onSwitch }) {
   const [masterKey, setMasterKey] = useState('');
   const [showKey, setShowKey]     = useState(false);
   const [loading, setLoading]     = useState(false);
+  const [loadingPasskey, setLoadingPasskey] = useState(false);
+  const [loadingFile, setLoadingFile] = useState(false);
   const [error, setError]         = useState('');
+
+  async function handleHardwareKeyLogin() {
+    if (!email || !email.includes('@')) {
+      return setError('Preencha um email válido primeiro.');
+    }
+    setError('');
+    setLoadingFile(true);
+
+    try {
+      // 1. Pede ao user para abrir a chave no disco
+      const fileKeyStr = await readKeyFile();
+      if (!fileKeyStr) {
+        setLoadingFile(false);
+        return; // user cancelou o picker
+      }
+
+      // 2. Tenta fazer login com essa master key providenciada via ficheiro
+      const { userId, salt } = await api.loginChallenge(email);
+      const [encKey, authToken] = await Promise.all([
+        deriveEncryptionKey(fileKeyStr, salt),
+        deriveAuthToken(fileKeyStr, salt),
+      ]);
+      const { token } = await api.loginVerify(userId, authToken);
+      login(token, encKey, email, userId);
+
+    } catch (err) {
+      if (err.message.includes('Credenciais inválidas')) {
+          setError('A Chave Hardware fornecida não corresponde a este utilizador.');
+      } else {
+          setError(err.message || 'Erro ao ler a chave de hardware.');
+      }
+    } finally {
+      setLoadingFile(false);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      // Passo 1: obter salt do servidor para derivar as chaves localmente
       const { userId, salt } = await api.loginChallenge(email);
-
-      // Derivação local — masterKey fica no browser
       const [encKey, authToken] = await Promise.all([
         deriveEncryptionKey(masterKey, salt),
         deriveAuthToken(masterKey, salt),
       ]);
-
-      // Passo 2: provar conhecimento com o authToken derivado (bcrypt no backend)
       const { token } = await api.loginVerify(userId, authToken);
-
-      login(token, encKey, email);
+      login(token, encKey, email, userId);
     } catch (err) {
       setError('Email ou MasterKey incorretos.');
     } finally {
       setLoading(false);
     }
   }
+
+  async function handlePasskeyLogin() {
+    if (!email) {
+      setError('Insira o seu email primeiro para usar a Passkey.');
+      return;
+    }
+    setError('');
+    setLoadingPasskey(true);
+    try {
+      const { token, encKey, userId } = await loginWithPasskey(email);
+      login(token, encKey, email, userId);
+    } catch (err) {
+      setError(err.message || 'Erro ao autenticar com Passkey. Dispositivo não suporta PRF?');
+    } finally {
+      setLoadingPasskey(false);
+    }
+  }
+
+  const isAnyLoading = loading || loadingPasskey || loadingFile;
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
@@ -66,7 +118,7 @@ export default function LoginPage({ onSwitch }) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm text-gray-400">MasterKey</label>
+            <label className="text-sm text-gray-400">Passphrase</label>
             <div className="relative">
               <input
                 className="input pr-11"
@@ -74,7 +126,7 @@ export default function LoginPage({ onSwitch }) {
                 placeholder="a tua chave mestre"
                 value={masterKey}
                 onChange={e => setMasterKey(e.target.value)}
-                required
+                required={!loadingPasskey && !loadingFile}
               />
               <button
                 type="button"
@@ -92,9 +144,29 @@ export default function LoginPage({ onSwitch }) {
             </div>
           )}
 
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? 'A autenticar...' : 'Entrar'}
-          </button>
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={handlePasskeyLogin} className="btn-ghost flex items-center justify-center gap-2 border border-gray-700/50 py-2.5 px-2 text-sm" disabled={isAnyLoading}>
+                 {loadingPasskey ? <Loader2 size={16} className="animate-spin" /> : <Fingerprint size={16} className="text-brand-light" />}
+                 <span className="truncate">{loadingPasskey ? 'A verificar...' : 'Passkey local'}</span>
+              </button>
+              
+              <button type="button" onClick={handleHardwareKeyLogin} className="btn-ghost flex items-center justify-center gap-2 border border-gray-700/50 py-2.5 px-2 text-sm" disabled={isAnyLoading}>
+                 {loadingFile ? <Loader2 size={16} className="animate-spin" /> : <HardDrive size={16} className="text-brand-light" />}
+                 <span className="truncate">{loadingFile ? 'A ler...' : 'Chave USB'}</span>
+              </button>
+            </div>
+            
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-gray-800"></div>
+              <span className="flex-shrink-0 mx-4 text-gray-500 text-xs">ou password</span>
+              <div className="flex-grow border-t border-gray-800"></div>
+            </div>
+
+            <button type="submit" className="btn-primary w-full" disabled={isAnyLoading || !masterKey}>
+              {loading ? 'A autenticar...' : 'Entrar com Passphrase'}
+            </button>
+          </div>
 
           <p className="text-center text-sm text-gray-500">
             Ainda não tens conta?{' '}

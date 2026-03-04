@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Shield, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
+import { Shield, Eye, EyeOff, CheckCircle, XCircle, HardDrive, Loader2 } from 'lucide-react';
 import { validateMasterKey, deriveEncryptionKey, deriveAuthToken } from '../utils/crypto';
+import { generateAndSaveKeyFile } from '../utils/fileAuth';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,11 +12,43 @@ export default function RegisterPage({ onSwitch }) {
   const [confirm, setConfirm]       = useState('');
   const [showKey, setShowKey]       = useState(false);
   const [loading, setLoading]       = useState(false);
+  const [loadingFile, setLoadingFile] = useState(false);
   const [error, setError]           = useState('');
 
   const keyErrors  = masterKey ? validateMasterKey(masterKey) : [];
   const isKeyValid = masterKey.length > 0 && keyErrors.length === 0;
   const isMatch    = confirm === masterKey;
+
+  async function handleHardwareKeyRegister() {
+    if (!email || !email.includes('@')) {
+      return setError('Preencha um email válido prrimeiro.');
+    }
+    setError('');
+    setLoadingFile(true);
+
+    try {
+      // 1. Gera e permite guardar a chave no disco
+      const fileKeyStr = await generateAndSaveKeyFile();
+      if (!fileKeyStr) {
+        setLoadingFile(false);
+        return; // user cancelou o picker
+      }
+
+      // 2. Continua o fluxo normal, usando `fileKeyStr` como MasterKey
+      const { userId, salt } = await api.register(email);
+      const [encKey, authToken] = await Promise.all([
+        deriveEncryptionKey(fileKeyStr, salt),
+        deriveAuthToken(fileKeyStr, salt),
+      ]);
+      const { token } = await api.registerFinalize(userId, authToken);
+      login(token, encKey, email, userId);
+      
+    } catch (err) {
+      setError(err.message || 'Erro ao criar chave de hardware.');
+    } finally {
+      setLoadingFile(false);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -38,7 +71,7 @@ export default function RegisterPage({ onSwitch }) {
       // Passo 2: enviar authToken (derivado, não a masterKey) para finalizar
       const { token } = await api.registerFinalize(userId, authToken);
 
-      login(token, encKey, email);
+      login(token, encKey, email, userId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -85,11 +118,16 @@ export default function RegisterPage({ onSwitch }) {
             />
           </div>
 
+          <div className="relative flex py-3 items-center">
+             <div className="flex-grow border-t border-gray-800"></div>
+             <span className="flex-shrink-0 mx-4 text-gray-500 text-xs text-center">Proteção</span>
+             <div className="flex-grow border-t border-gray-800"></div>
+          </div>
+
           {/* MasterKey */}
           <div className="space-y-1.5">
             <label className="text-sm text-gray-400">
-              MasterKey
-              <span className="ml-2 text-xs text-brand-light">nunca enviada ao servidor</span>
+              Passphrase Tradicional
             </label>
             <div className="relative">
               <input
@@ -98,7 +136,7 @@ export default function RegisterPage({ onSwitch }) {
                 placeholder="a tua chave mestre secreta"
                 value={masterKey}
                 onChange={e => setMasterKey(e.target.value)}
-                required
+                required={masterKey.length > 0 || !loadingFile} // relax if doing file
               />
               <button
                 type="button"
@@ -125,20 +163,22 @@ export default function RegisterPage({ onSwitch }) {
           </div>
 
           {/* Confirmar MasterKey */}
-          <div className="space-y-1.5">
-            <label className="text-sm text-gray-400">Confirmar MasterKey</label>
-            <input
-              className={`input ${confirm && !isMatch ? 'border-red-500' : ''}`}
-              type="password"
-              placeholder="repete a chave mestre"
-              value={confirm}
-              onChange={e => setConfirm(e.target.value)}
-              required
-            />
-            {confirm && !isMatch && (
-              <p className="text-xs text-red-400">As MasterKeys não coincidem.</p>
-            )}
-          </div>
+          {masterKey && (
+            <div className="space-y-1.5">
+              <label className="text-sm text-gray-400">Confirmar Passphrase</label>
+              <input
+                className={`input ${confirm && !isMatch ? 'border-red-500' : ''}`}
+                type="password"
+                placeholder="repete a chave mestre"
+                value={confirm}
+                onChange={e => setConfirm(e.target.value)}
+                required
+              />
+              {confirm && !isMatch && (
+                <p className="text-xs text-red-400">As chaves não coincidem.</p>
+              )}
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
@@ -146,24 +186,35 @@ export default function RegisterPage({ onSwitch }) {
             </div>
           )}
 
-          <button
-            type="submit"
-            className="btn-primary w-full"
-            disabled={loading || !isKeyValid || !isMatch || !email}
-          >
-            {loading ? 'A criar conta...' : 'Criar conta'}
-          </button>
-
-          <p className="text-center text-sm text-gray-500">
-            Já tens conta?{' '}
-            <button type="button" onClick={onSwitch} className="text-brand-light hover:underline">
-              Entrar
+          <div className="flex flex-col gap-3 pt-2">
+            <button
+               type="button"
+               onClick={handleHardwareKeyRegister}
+               className="btn-ghost flex items-center justify-center gap-2 w-full border border-brand-light/30 text-brand-light hover:bg-brand-light/10"
+               disabled={loading || loadingFile}
+            >
+               {loadingFile ? <Loader2 size={18} className="animate-spin" /> : <HardDrive size={18} />}
+               {loadingFile ? 'A Guardar...' : 'Criar Chave Hardware (USB)'}
             </button>
+            <button
+               type="submit"
+               className="btn-primary w-full mt-1"
+               disabled={loading || loadingFile || !masterKey}
+            >
+               {loading ? 'A criar conta...' : 'Criar conta com Passphrase'}
+            </button>
+          </div>
+
+          <p className="text-center text-sm text-gray-500 pt-2">
+             Já tens conta?{' '}
+             <button type="button" onClick={onSwitch} className="text-brand-light hover:underline">
+               Entrar
+             </button>
           </p>
         </form>
 
         <p className="text-center text-xs text-gray-600 mt-4">
-          A MasterKey nunca sai do teu browser. Usa PBKDF2 + AES-GCM.
+          Nenhuma chave sai do teu browser. Cifrado com AES-GCM localmente.
         </p>
       </div>
     </div>

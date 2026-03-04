@@ -17,13 +17,7 @@ router.use(auth);
 // Devolve todos os registos cifrados do utilizador autenticado
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await db.query(
-      `SELECT id, site, username, encrypted_password, created_at, updated_at
-       FROM passwords
-       WHERE user_id = ?
-       ORDER BY site ASC`,
-      [req.user.userId]
-    );
+    const rows = await db.queryFallback('passwords', 'find', [{ user_id: req.user.userId }]).then(c => c.sort({ site: 1 }).toArray());
     res.json(rows);
   } catch (err) {
     console.error('[passwords GET]', err);
@@ -49,10 +43,9 @@ router.post('/', async (req, res) => {
     }
 
     const id = uuidv4();
-    await db.query(
-      'INSERT INTO passwords (id, user_id, site, username, encrypted_password) VALUES (?, ?, ?, ?, ?)',
-      [id, req.user.userId, site.trim(), username.trim(), encrypted_password]
-    );
+    await db.queryFallback('passwords', 'insertOne', [{
+      id, user_id: req.user.userId, site: site.trim(), username: username.trim(), encrypted_password, created_at: new Date(), updated_at: new Date()
+    }]);
 
     res.status(201).json({ id, site, username, encrypted_password });
   } catch (err) {
@@ -73,14 +66,12 @@ router.put('/:id', async (req, res) => {
     }
 
     // user_id no WHERE garante que o utilizador só edita os seus próprios registos (previne IDOR)
-    const [result] = await db.query(
-      `UPDATE passwords
-       SET site = ?, username = ?, encrypted_password = ?
-       WHERE id = ? AND user_id = ?`,
-      [site.trim(), (username || '').trim(), encrypted_password, id, req.user.userId]
-    );
+    const result = await db.queryFallback('passwords', 'updateOne', [
+      { id, user_id: req.user.userId },
+      { $set: { site: site.trim(), username: (username || '').trim(), encrypted_password, updated_at: new Date() } }
+    ]);
 
-    if (!result.affectedRows) {
+    if (!result.modifiedCount && !result.matchedCount) {
       return res.status(404).json({ error: 'Registo não encontrado.' });
     }
     res.json({ success: true });
@@ -93,12 +84,9 @@ router.put('/:id', async (req, res) => {
 // ─── DELETE /api/passwords/:id ────────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
   try {
-    const [result] = await db.query(
-      'DELETE FROM passwords WHERE id = ? AND user_id = ?',
-      [req.params.id, req.user.userId]
-    );
+    const result = await db.queryFallback('passwords', 'deleteOne', [{ id: req.params.id, user_id: req.user.userId }]);
 
-    if (!result.affectedRows) {
+    if (!result.deletedCount) {
       return res.status(404).json({ error: 'Registo não encontrado.' });
     }
     res.json({ success: true });
