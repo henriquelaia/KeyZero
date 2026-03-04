@@ -9,7 +9,7 @@ Gestor de passwords **Zero-Knowledge** desenvolvido para o Hackathon *Shift to D
 - **Arquitetura Zero-Knowledge** — encKey e authToken derivados localmente via PBKDF2 (310 000 iterações, SHA-256); o servidor só armazena `bcrypt(authToken)`
 - **Criptografia AES-GCM 256-bit** — passwords cifradas no browser antes de serem enviadas
 - **Passkeys com WebAuthn PRF** — login biométrico zero-knowledge: a PRF Extension do WebAuthn substitui a MasterKey de forma transparente
-- **Login por Ficheiro de Chave** — alternativa à MasterKey manual: chave gerada e guardada em disco
+- **Login por Ficheiro de Chave** — alternativa à MasterKey manual: chave de 256 bits gerada e guardada em disco; email validado pelo servidor antes de gerar o ficheiro; cancelar o picker não bloqueia a interface
 - **Cofre CRUD** — adicionar, editar, copiar, apagar passwords com pesquisa em tempo real
 - **Gerador CSPRNG** — `window.crypto.getRandomValues`, garante maiúscula, número e símbolo
 - **Deteção de Phishing** — Google Safe Browsing API + typosquatting local (distância de Levenshtein)
@@ -121,7 +121,11 @@ KeyZero/
 
 ## Equipa
 
-Projeto desenvolvido para o Hackathon **Shift to Digital**.
+Projeto desenvolvido para o Hackathon **Shift to Digital** por:
+
+- [@henriquelaia](https://github.com/henriquelaia)
+- [@Brunocor26](https://github.com/Brunocor26)
+
 Toda a arquitectura foi desenhada para maximizar a segurança sem sacrificar a usabilidade.
 
 Para documentação técnica detalhada, consulta [DOCS.md](./DOCS.md).

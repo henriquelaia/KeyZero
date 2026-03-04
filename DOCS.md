@@ -119,9 +119,26 @@ POST /api/auth/passkeys/login/verify { email, response }
 
 O PRF output é determinístico para o mesmo autenticador e o mesmo `rpID` — funciona como uma "MasterKey invisível" gerada pela biometria.
 
-### 3.5 Login com Ficheiro de Chave
+### 3.5 Registo e Login com Ficheiro de Chave
 
-O utilizador gera um ficheiro com uma chave aleatória de 256 bits no registo (guardado localmente). No login, abre o ficheiro — o conteúdo substitui a MasterKey no fluxo clássico.
+O ficheiro `.keyzero` contém 32 bytes de entropia gerados com `crypto.getRandomValues`, codificados em Base64. O conteúdo substitui a MasterKey no fluxo clássico — o utilizador nunca escreve uma passphrase.
+
+**Registo:**
+```
+1. Servidor valida o email (POST /api/auth/register)
+   → Só após confirmação, o browser abre o picker para guardar o ficheiro
+   → Garante que o ficheiro nunca é gerado para emails já registados
+2. Fluxo clássico continua com o conteúdo do ficheiro como MasterKey
+```
+
+**Login:**
+```
+1. Browser abre o picker para seleccionar o ficheiro .keyzero
+   → Se o utilizador cancelar, o spinner para imediatamente (sem bloquear a UI)
+2. Conteúdo lido → substitui a MasterKey no fluxo clássico de login
+```
+
+O picker usa a **File System Access API** (`showOpenFilePicker` / `showSaveFilePicker`) com fallback para `<input type="file">`. No fallback, o cancelamento é detectado via evento `focus` na janela.
 
 ---
 
@@ -323,6 +340,11 @@ Três modalidades de autenticação disponíveis:
 - Botão "Passkey" (WebAuthn PRF)
 - Botão "Ficheiro de Chave" (file picker)
 
+Comportamentos garantidos:
+- **Registo com ficheiro**: o email é validado pelo servidor *antes* de gerar ou descarregar o ficheiro — evita criar ficheiros para contas já existentes
+- **Cancelar o picker**: se o utilizador fechar o seletor de ficheiro sem escolher nada, o estado de loading é reposto imediatamente, sem bloquear a interface
+- **Todas as mensagens de erro** estão em português de Portugal
+
 ---
 
 ## 9. Deteção de Phishing
@@ -376,6 +398,7 @@ GOOGLE_SAFE_BROWSING_KEY=<AIza...>
 - Usar MongoDB Atlas ou servidor gerido com TLS ativo
 - Servir o frontend via CDN ou servidor estático; o Vite proxy só existe em desenvolvimento
 - Configurar HTTPS (WebAuthn e PRF **exigem** origem segura em produção)
+- No MongoDB Atlas, configurar **Network Access** com o IP do servidor de produção (não usar `0.0.0.0/0` em produção)
 
 ---
 
@@ -390,3 +413,6 @@ GOOGLE_SAFE_BROWSING_KEY=<AIza...>
 | Sem localStorage para chaves | Elimina superfície de ataque XSS persistente; sessão termina ao fechar o tab |
 | UUID v4 para IDs | Sem inferência de sequência, sem enumeração de registos |
 | Separação encKey / authToken | Garante que o servidor nunca pode derivar a chave de encriptação, mesmo conhecendo o authToken |
+| Validação server-first no registo com ficheiro | O servidor confirma disponibilidade do email antes de gerar o ficheiro — evita descarregar chaves para contas já existentes |
+| Deteção de cancelamento do file picker | Evento `focus` na janela resolve a Promise quando o utilizador fecha o picker sem seleccionar ficheiro — sem spinner infinito |
+| Todas as mensagens em português | Consistência de UX e acessibilidade para utilizadores portugueses |

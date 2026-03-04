@@ -101,11 +101,13 @@ export async function readKeyFile() {
     input.type = 'file';
     input.accept = '.keyzero';
     input.style.display = 'none';
-    
+
+    let settled = false;
+
     input.onchange = async (e) => {
+      settled = true;
       const file = e.target.files[0];
-      if (!file) return resolve(null); // Cancelado
-      
+      if (!file) return resolve(null);
       try {
         const text = await file.text();
         if (!text || text.trim().length === 0) {
@@ -113,17 +115,26 @@ export async function readKeyFile() {
         }
         resolve(text.trim());
       } catch (err) {
-        console.error('Erro no FileReader:', err);
         reject(new Error('Não foi possível ler o ficheiro indicado.'));
+      } finally {
+        document.body.removeChild(input);
       }
     };
-    
+
+    // Detecta cancelamento: quando a janela volta a ter foco e o onchange não disparou
+    const onFocus = () => {
+      window.removeEventListener('focus', onFocus);
+      setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve(null);
+          if (document.body.contains(input)) document.body.removeChild(input);
+        }
+      }, 300);
+    };
+    window.addEventListener('focus', onFocus);
+
     document.body.appendChild(input);
     input.click();
-    
-    // Cleanup
-    setTimeout(() => {
-      document.body.removeChild(input);
-    }, 1000);
   });
 }
