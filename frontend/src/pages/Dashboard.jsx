@@ -36,8 +36,47 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+// ─── Typosquatting detection ──────────────────────────────────────────────────
+const POPULAR_DOMAINS = [
+  'google.com','facebook.com','apple.com','microsoft.com','amazon.com',
+  'paypal.com','instagram.com','twitter.com','linkedin.com','github.com',
+  'netflix.com','youtube.com','gmail.com','outlook.com','yahoo.com',
+  'dropbox.com','ebay.com','bankofamerica.com','chase.com','wellsfargo.com',
+  'instagram.com','snapchat.com','tiktok.com','reddit.com','wikipedia.org',
+  'adobe.com','spotify.com','icloud.com','live.com','office.com',
+];
+
+const CHAR_SUBSTITUTIONS = { '0':'o','1':'l','3':'e','4':'a','5':'s','6':'b','7':'t','8':'b','9':'g','l':'1','i':'1','|':'l' };
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+function normalizeDomain(domain) {
+  return domain.split('').map(c => CHAR_SUBSTITUTIONS[c] || c).join('');
+}
+
+function isSuspiciousDomain(input) {
+  try {
+    const url = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    if (POPULAR_DOMAINS.includes(hostname)) return false; // é o real
+    const normalized = normalizeDomain(hostname);
+    for (const popular of POPULAR_DOMAINS) {
+      if (normalized === popular) return popular; // substituição de char (ex: go0gle.com → google.com)
+      if (levenshtein(hostname, popular) <= 2) return popular; // typo próximo
+    }
+    return false;
+  } catch { return false; }
+}
+
 // ─── PhishingBadge ────────────────────────────────────────────────────────────
-function PhishingBadge({ status }) {
+function PhishingBadge({ status, lookalike }) {
   if (status === 'checking') return (
     <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1.5">
       <Loader2 size={12} className="animate-spin" />
@@ -48,6 +87,12 @@ function PhishingBadge({ status }) {
     <div className="flex items-center gap-1.5 text-xs text-red-400 mt-1.5 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
       <AlertTriangle size={13} className="shrink-0" />
       <span><strong>Atenção:</strong> Este site foi reportado como phishing ou malware pela Google Safe Browsing. Tens a certeza?</span>
+    </div>
+  );
+  if (status === 'suspicious') return (
+    <div className="flex items-center gap-1.5 text-xs text-yellow-400 mt-1.5 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2">
+      <AlertTriangle size={13} className="shrink-0" />
+      <span><strong>Domínio suspeito:</strong> Este endereço parece imitar <strong>{lookalike}</strong>. Pode ser typosquatting.</span>
     </div>
   );
   if (status === 'safe') return (
@@ -65,24 +110,32 @@ function PasswordForm({ initial, onSave, onClose, loading, token }) {
   const [username, setUsername]   = useState(initial?.username || '');
   const [password, setPassword]   = useState(initial?.plaintext || '');
   const [showPw, setShowPw]       = useState(false);
-  const [phishing, setPhishing]   = useState(null); // null | 'checking' | 'safe' | 'unsafe'
+  const [phishing, setPhishing]   = useState(null); // null | 'checking' | 'safe' | 'unsafe' | 'suspicious'
+  const [lookalike, setLookalike] = useState(null);
   const debounceRef               = useRef(null);
 
   function handleSiteChange(value) {
     setSite(value);
     setPhishing(null);
+    setLookalike(null);
     clearTimeout(debounceRef.current);
     if (!value.trim()) return;
 
     debounceRef.current = setTimeout(async () => {
       setPhishing('checking');
+      // Verificação local de typosquatting (instantânea, não depende de API)
+      const suspiciousMatch = isSuspiciousDomain(value);
+      if (suspiciousMatch) {
+        setLookalike(suspiciousMatch);
+        setPhishing('suspicious');
+        return; // não precisamos de chamar a API — já é claramente suspeito
+      }
       try {
-        // Normalizar: adicionar https:// se não tiver protocolo
         const urlToCheck = /^https?:\/\//i.test(value) ? value : `https://${value}`;
         const result = await api.checkUrl(token, urlToCheck);
         setPhishing(result.safe ? 'safe' : 'unsafe');
       } catch {
-        setPhishing(null); // não bloquear em caso de erro
+        setPhishing(null);
       }
     }, 700);
   }
@@ -97,7 +150,7 @@ function PasswordForm({ initial, onSave, onClose, loading, token }) {
       <div className="space-y-1.5">
         <label className="text-sm text-gray-400 flex items-center gap-1.5"><Globe size={13} /> Site / Aplicação</label>
         <input className="input" placeholder="ex: github.com" value={site} onChange={e => handleSiteChange(e.target.value)} required />
-        <PhishingBadge status={phishing} />
+        <PhishingBadge status={phishing} lookalike={lookalike} />
       </div>
       <div className="space-y-1.5">
         <label className="text-sm text-gray-400 flex items-center gap-1.5"><User size={13} /> Username / Email</label>
