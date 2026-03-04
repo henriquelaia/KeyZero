@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Shield, Plus, Search, LogOut, Eye, EyeOff, Copy, Trash2,
   Pencil, RefreshCw, X, Check, Lock, Globe, User, KeyRound,
+  AlertTriangle, ShieldCheck, Loader2,
 } from 'lucide-react';
 import { encryptPassword, decryptPassword, generatePassword } from '../utils/crypto';
 import { api } from '../lib/api';
@@ -35,12 +36,56 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+// ─── PhishingBadge ────────────────────────────────────────────────────────────
+function PhishingBadge({ status }) {
+  if (status === 'checking') return (
+    <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1.5">
+      <Loader2 size={12} className="animate-spin" />
+      A verificar segurança do site...
+    </div>
+  );
+  if (status === 'unsafe') return (
+    <div className="flex items-center gap-1.5 text-xs text-red-400 mt-1.5 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+      <AlertTriangle size={13} className="shrink-0" />
+      <span><strong>Atenção:</strong> Este site foi reportado como phishing ou malware pela Google Safe Browsing. Tens a certeza?</span>
+    </div>
+  );
+  if (status === 'safe') return (
+    <div className="flex items-center gap-1.5 text-xs text-green-400 mt-1.5">
+      <ShieldCheck size={12} />
+      Site verificado — não está na lista de ameaças conhecidas.
+    </div>
+  );
+  return null;
+}
+
 // ─── PasswordForm (Criar / Editar) ────────────────────────────────────────────
-function PasswordForm({ initial, onSave, onClose, loading }) {
-  const [site, setSite]       = useState(initial?.site     || '');
-  const [username, setUsername] = useState(initial?.username || '');
-  const [password, setPassword] = useState(initial?.plaintext || '');
-  const [showPw, setShowPw]   = useState(false);
+function PasswordForm({ initial, onSave, onClose, loading, token }) {
+  const [site, setSite]           = useState(initial?.site     || '');
+  const [username, setUsername]   = useState(initial?.username || '');
+  const [password, setPassword]   = useState(initial?.plaintext || '');
+  const [showPw, setShowPw]       = useState(false);
+  const [phishing, setPhishing]   = useState(null); // null | 'checking' | 'safe' | 'unsafe'
+  const debounceRef               = useRef(null);
+
+  function handleSiteChange(value) {
+    setSite(value);
+    setPhishing(null);
+    clearTimeout(debounceRef.current);
+    if (!value.trim()) return;
+
+    debounceRef.current = setTimeout(async () => {
+      setPhishing('checking');
+      try {
+        // Normalizar: adicionar https:// se não tiver protocolo
+        const urlToCheck = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+        const result = await api.checkUrl(token, urlToCheck);
+        setPhishing(result.safe ? 'safe' : 'unsafe');
+      } catch {
+        setPhishing(null); // não bloquear em caso de erro
+      }
+    }, 700);
+  }
 
   function generate() {
     setPassword(generatePassword(20));
@@ -51,7 +96,8 @@ function PasswordForm({ initial, onSave, onClose, loading }) {
     <form onSubmit={e => { e.preventDefault(); onSave({ site, username, password }); }} className="space-y-4">
       <div className="space-y-1.5">
         <label className="text-sm text-gray-400 flex items-center gap-1.5"><Globe size={13} /> Site / Aplicação</label>
-        <input className="input" placeholder="ex: github.com" value={site} onChange={e => setSite(e.target.value)} required />
+        <input className="input" placeholder="ex: github.com" value={site} onChange={e => handleSiteChange(e.target.value)} required />
+        <PhishingBadge status={phishing} />
       </div>
       <div className="space-y-1.5">
         <label className="text-sm text-gray-400 flex items-center gap-1.5"><User size={13} /> Username / Email</label>
@@ -283,9 +329,9 @@ export default function Dashboard() {
         </div>
 
         {/* ZK Badge */}
-        <div className="flex items-center gap-2 mb-6 bg-brand/10 border border-brand/20 rounded-xl px-4 py-2.5 w-fit">
-          <Lock size={13} className="text-brand-light" />
-          <p className="text-xs text-brand-light">
+        <div className="flex items-center gap-2 mb-6 bg-brand/10 border border-brand/20 rounded-xl px-4 py-2.5 max-w-full w-fit">
+          <Lock size={13} className="text-brand-light shrink-0" />
+          <p className="text-xs text-brand-light break-words">
             Cifrado com AES-GCM 256-bit · Chave derivada via PBKDF2 · Zero-Knowledge
           </p>
         </div>
@@ -328,14 +374,14 @@ export default function Dashboard() {
       {/* ─── Modal Criar ─── */}
       {modal === 'create' && (
         <Modal title="Nova password" onClose={() => setModal(null)}>
-          <PasswordForm onSave={handleCreate} onClose={() => setModal(null)} loading={saving} />
+          <PasswordForm onSave={handleCreate} onClose={() => setModal(null)} loading={saving} token={token} />
         </Modal>
       )}
 
       {/* ─── Modal Editar ─── */}
       {modal && modal !== 'create' && (
         <Modal title="Editar password" onClose={() => setModal(null)}>
-          <PasswordForm initial={modal} onSave={handleEdit} onClose={() => setModal(null)} loading={saving} />
+          <PasswordForm initial={modal} onSave={handleEdit} onClose={() => setModal(null)} loading={saving} token={token} />
         </Modal>
       )}
 

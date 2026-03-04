@@ -13,6 +13,7 @@ app.use(express.json({ limit: '1mb' }));
 // ─── Rotas ────────────────────────────────────────────────────────────────────
 app.use('/api/auth',      require('./routes/auth'));
 app.use('/api/passwords', require('./routes/passwords'));
+app.use('/api/check-url', require('./routes/urlcheck'));
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ status: 'ok', project: 'KeyZero' }));

@@ -32,4 +32,7 @@ export const api = {
   createPassword: (token, site, username, enc)       => request('POST',   '/passwords',        { site, username, encrypted_password: enc }, token),
   updatePassword: (token, id, site, username, enc)   => request('PUT',    `/passwords/${id}`,  { site, username, encrypted_password: enc }, token),
   deletePassword: (token, id)                        => request('DELETE', `/passwords/${id}`,  null,                        token),
+
+  // Segurança
+  checkUrl: (token, url) => request('POST', '/check-url', { url }, token),
 };
