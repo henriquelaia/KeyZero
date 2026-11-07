@@ -1,5 +1,5 @@
 /**
- * Testes do módulo crypto do browser (Web Crypto API no Node 24).
+ * Testes do módulo crypto do browser (Web Crypto API no Node 22+).
  * Cobre validação, round-trip, rejeição com chave errada e separação :enc/:auth
  * via vectores determinísticos (dois tokens distintos para a mesma MasterKey+salt).
  */

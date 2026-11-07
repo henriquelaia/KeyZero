@@ -31,7 +31,7 @@ Individual contribution split is not claimed here beyond shared authorship of th
 
 ## Local setup
 
-Requirements: Node.js 18+, MongoDB (local or Atlas).
+Requirements: Node.js 22+ (needed for backend `jose@6` under CommonJS), MongoDB (local or Atlas).
 
 ### Backend
 

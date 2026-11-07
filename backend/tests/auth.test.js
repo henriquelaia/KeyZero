@@ -17,7 +17,6 @@ before(() => {
   app.use(express.json());
   app.use('/api/auth', authRouter);
   request = async (method, path, body) => {
-    const http = require('node:http');
     const server = app.listen(0, '127.0.0.1');
     await new Promise((r) => server.once('listening', r));
     const { port } = server.address();

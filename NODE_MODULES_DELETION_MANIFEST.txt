@@ -1,25 +1,26 @@
 # KeyZero node_modules deletion manifest
 Base commit: 325275fa1bf61177718cac8a1b1fd04eed3dc965
-Head commit: 7f0b52baaf9a7ae6e28a3de8d20a71733f00d000
-Branch (local only): cursor/keyzero-cleanup-de89
+Branch: cursor/keyzero-cleanup-ca3d
 
-Removed from git index (not included in KEYZERO-CHANGES.patch body):
+Removed from git index (normal commit; history not rewritten):
 - backend/node_modules/ (previously ~2878 tracked blobs)
 - frontend/node_modules/ (previously ~6918 tracked blobs)
+- Total removed from index: 9796 tracked blobs
 
 Preserved:
 - backend/package-lock.json
 - frontend/package-lock.json
 - .gitignore already lists node_modules/
 
-To reproduce the deletion on a fresh clone of the old tree:
+Reproduce on a tree that still tracks node_modules:
   git rm -r --cached backend/node_modules frontend/node_modules
   rm -rf backend/node_modules frontend/node_modules
   (cd backend && npm ci) && (cd frontend && npm ci)
 
-Code/docs added in this local commit (see KEYZERO-CHANGES.patch):
+Code/docs included with this cleanup:
 A	.github/workflows/ci.yml
 A	NODE_MODULES_DELETION_MANIFEST.txt
+M	.gitignore
 M	README.md
 M	backend/package.json
 A	backend/tests/auth.test.js
@@ -27,8 +28,3 @@ A	backend/tests/helpers/mockDb.js
 A	backend/tests/passwords.test.js
 M	frontend/package.json
 A	frontend/tests/crypto.test.mjs
-
-Applied on branch cursor/keyzero-cleanup-ca3d (Cloud Agent):
-- Base remained 325275fa1bf61177718cac8a1b1fd04eed3dc965 (no upstream drift)
-- `git rm -r --cached backend/node_modules frontend/node_modules` removed 9796 tracked blobs
-- Lockfiles preserved; working tree reinstall via npm ci
